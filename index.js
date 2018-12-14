@@ -13,6 +13,7 @@ var argv   = require('minimist')(process.argv.slice(2));
 var settings = {};
 settings.CONFIG_FILE = argv.config || 'config.xml';
 settings.ICON_FILE = argv.icon || 'icon.png';
+settings.PUSH_ICON_FILE = argv.push_icon || 'push_icon.png';
 settings.OLD_XCODE_PATH = argv['xcode-old'] || false;
 
 /**
@@ -84,7 +85,22 @@ var getPlatforms = function (projectName) {
       { name : 'mipmap-xhdpi/icon.png', size : 96 },
       { name : 'mipmap-xxhdpi/icon.png', size : 144 },
       { name : 'mipmap-xxxhdpi/icon.png', size : 192 }
-    ]
+    ],
+    push_icons: [
+      { name : 'drawable/push_icon.png',       size : 96 },
+      { name : 'drawable-hdpi/push_icon.png',  size : 72 },
+      { name : 'drawable-ldpi/push_icon.png',  size : 36 },
+      { name : 'drawable-mdpi/push_icon.png',  size : 48 },
+      { name : 'drawable-xhdpi/push_icon.png', size : 96 },
+      { name : 'drawable-xxhdpi/push_icon.png', size : 144 },
+      { name : 'drawable-xxxhdpi/push_icon.png', size : 192 },
+      { name : 'mipmap-hdpi/push_icon.png',  size : 72 },
+      { name : 'mipmap-ldpi/push_icon.png',  size : 36 },
+      { name : 'mipmap-mdpi/push_icon.png',  size : 48 },
+      { name : 'mipmap-xhdpi/push_icon.png', size : 96 },
+      { name : 'mipmap-xxhdpi/push_icon.png', size : 144 },
+      { name : 'mipmap-xxxhdpi/push_icon.png', size : 192 }
+    ],
   });
   platforms.push({
     name : 'osx',
@@ -257,6 +273,52 @@ var generateIcon = function (platform, icon) {
   return deferred.promise;
 };
 
+var generatePushIcon = function (platform, icon) {
+  var deferred = Q.defer();
+  var srcPath = settings.PUSH_ICON_FILE;
+  var platformPath = srcPath.replace(/\.png$/, '-' + platform.name + '.png');
+  if (fs.existsSync(platformPath)) {
+    srcPath = platformPath;
+  }
+  var dstPath = platform.iconsPath + icon.name;
+  var dst = path.dirname(dstPath);
+  if (!fs.existsSync(dst)) {
+    fs.mkdirsSync(dst);
+  }
+  ig.resize({
+    srcPath: srcPath,
+    dstPath: dstPath,
+    quality: 1,
+    format: 'png',
+    width: icon.size,
+    height: icon.size
+  } , function(err, stdout, stderr){
+    if (err) {
+      deferred.reject(err);
+    } else {
+      deferred.resolve();
+      display.success(icon.name + ' created');
+    }
+  });
+  if (icon.height) {
+    ig.crop({
+      srcPath: srcPath,
+      dstPath: dstPath,
+      quality: 1,
+      format: 'png',
+      width: icon.size,
+      height: icon.height
+    } , function(err, stdout, stderr){
+      if (err) {
+        deferred.reject(err);
+      } else {
+        deferred.resolve();
+        display.success(icon.name + ' cropped');
+      }
+    });
+  }
+  return deferred.promise;
+};
 /**
  * Generates icons based on the platform object
  *
@@ -267,9 +329,17 @@ var generateIconsForPlatform = function (platform) {
   display.header('Generating Icons for ' + platform.name);
   var all = [];
   var icons = platform.icons;
+  var push_icons = platform.push_icons || [];
+
   icons.forEach(function (icon) {
     all.push(generateIcon(platform, icon));
   });
+
+  // for Android push notification icon 
+  push_icons.forEach(function (icon) {
+    all.push(generatePushIcon(platform, icon));
+  });
+
   return Promise.all(all);
 };
 
@@ -336,6 +406,20 @@ var validIconExists = function () {
   return deferred.promise;
 };
 
+var validPushIconExists = function () {
+  var deferred = Q.defer();
+  fs.exists(settings.PUSH_ICON_FILE, function (exists) {
+    if (exists) {
+      display.success(settings.PUSH_ICON_FILE + ' exists');
+      deferred.resolve()
+    } else {
+      display.error(settings.PUSH_ICON_FILE + ' does not exist');
+      deferred.reject();
+    }
+  });
+  return deferred.promise;
+};
+
 /**
  * Checks if a config.xml file exists
  *
@@ -359,6 +443,7 @@ display.header('Checking Project & Icon');
 
 atLeastOnePlatformFound()
   .then(validIconExists)
+  .then(validPushIconExists)
   .then(configFileExists)
   .then(getProjectName)
   .then(getPlatforms)
