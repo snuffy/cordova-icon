@@ -414,7 +414,7 @@ var validPushIconExists = function () {
       deferred.resolve()
     } else {
       display.error(settings.PUSH_ICON_FILE + ' does not exist');
-      deferred.reject();
+      deferred.resolve()
     }
   });
   return deferred.promise;
